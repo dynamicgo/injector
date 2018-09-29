@@ -28,6 +28,12 @@ func TestInjectorGet(t *testing.T) {
 
 	require.False(t, Get("test", &a1))
 
+	a := make([]*testA, 0)
+
+	Find(&a)
+
+	require.Equal(t, 2, len(a))
+
 	b := &testB{}
 
 	require.NoError(t, Inject(b))

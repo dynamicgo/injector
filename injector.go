@@ -67,7 +67,16 @@ func (injector *typeInjector) Find(target interface{}) {
 		return true
 	})
 
-	targetSlice.Elem().Set(reflect.ValueOf(values))
+	sliceValue := reflect.MakeSlice(reflect.SliceOf(injector.valueT), len(values), len(values))
+
+	for i := 0; i < len(values); i++ {
+		sliceValue.Index(i).Set(reflect.ValueOf(values[i]))
+	}
+
+	println("slice len", sliceValue.Len())
+
+	targetSlice.Elem().Set(sliceValue)
+
 }
 
 type injectorImpl struct {
@@ -117,7 +126,13 @@ func (inject *injectorImpl) Find(val interface{}) {
 	t := reflect.TypeOf(val)
 
 	if t.Kind() != reflect.Ptr && t.Elem().Kind() != reflect.Slice {
-		panic("invalid input value,expect slice")
+		panic("invalid input value,expect ptr of slice")
+	}
+
+	t = t.Elem().Elem()
+
+	if (t.Kind() != reflect.Ptr || t.Elem().Kind() != reflect.Struct) && t.Kind() != reflect.Interface {
+		panic("invalid inject field type, expect ptr of struct or interface")
 	}
 
 	inject.getTypeInjector(t).Find(val)
