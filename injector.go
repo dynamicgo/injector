@@ -1,0 +1,220 @@
+package injector
+
+import (
+	"errors"
+	"reflect"
+	"sync"
+
+	"github.com/dynamicgo/xerrors"
+)
+
+// public errors
+var (
+	ErrResource = errors.New("resource not found")
+)
+
+// Injector .
+type Injector interface {
+	Register(key string, val interface{})
+	Get(key string, val interface{}) bool
+	Find(val interface{})
+	Inject(val interface{}) error
+}
+
+type typeInjector struct {
+	valueT reflect.Type
+	sync.Map
+}
+
+func newTypeInjector(valueT reflect.Type) *typeInjector {
+
+	return &typeInjector{
+		valueT: valueT,
+	}
+}
+
+func (injector *typeInjector) Register(key string, val interface{}) {
+	injector.Store(key, val)
+}
+
+func (injector *typeInjector) Get(key string, val interface{}) bool {
+
+	valueT := reflect.TypeOf(val).Elem()
+
+	if valueT != injector.valueT || valueT.Kind() == reflect.Interface && !injector.valueT.Implements(valueT) {
+		panic("invalid input")
+	}
+
+	val2, ok := injector.Load(key)
+
+	if !ok {
+		return false
+	}
+
+	reflect.ValueOf(val).Elem().Set(reflect.ValueOf(val2))
+
+	return true
+}
+
+func (injector *typeInjector) Find(target interface{}) {
+
+	targetSlice := reflect.ValueOf(target)
+
+	var values []interface{}
+
+	injector.Range(func(key, val interface{}) bool {
+		values = append(values, val)
+		return true
+	})
+
+	targetSlice.Elem().Set(reflect.ValueOf(values))
+}
+
+type injectorImpl struct {
+	sync.Map
+}
+
+// New .
+func New() Injector {
+	return &injectorImpl{}
+}
+
+func (inject *injectorImpl) getTypeInjector(valueT reflect.Type) *typeInjector {
+	injectT, ok := inject.Load(valueT)
+
+	if !ok {
+
+		injectT = newTypeInjector(valueT)
+		injectT, _ = inject.LoadOrStore(valueT, injectT)
+	}
+
+	return injectT.(*typeInjector)
+}
+
+func (inject *injectorImpl) Register(key string, val interface{}) {
+	t := reflect.TypeOf(val)
+
+	inject.getTypeInjector(t).Register(key, val)
+}
+
+func (inject *injectorImpl) Get(key string, val interface{}) bool {
+	t := reflect.TypeOf(val)
+
+	if t.Kind() != reflect.Ptr {
+		panic("invalid input value, expect ptr of struct or interface")
+	}
+
+	t = t.Elem()
+
+	if (t.Kind() != reflect.Ptr || t.Elem().Kind() != reflect.Struct) && t.Kind() != reflect.Interface {
+		panic("invalid inject field type, expect ptr of struct or interface")
+	}
+
+	return inject.getTypeInjector(t).Get(key, val)
+}
+
+func (inject *injectorImpl) Find(val interface{}) {
+	t := reflect.TypeOf(val)
+
+	if t.Kind() != reflect.Ptr && t.Elem().Kind() != reflect.Slice {
+		panic("invalid input value,expect slice")
+	}
+
+	inject.getTypeInjector(t).Find(val)
+}
+
+// Inject .
+func (inject *injectorImpl) Inject(target interface{}) error {
+
+	valT := reflect.TypeOf(target)
+
+	if valT.Kind() != reflect.Ptr || valT.Elem().Kind() != reflect.Struct {
+		panic("inject target must be struct ptr")
+	}
+
+	structT := valT.Elem()
+	structValue := reflect.ValueOf(target).Elem()
+
+	for i := 0; i < structT.NumField(); i++ {
+		field := structT.Field(i)
+
+		tagStr, ok := field.Tag.Lookup("inject")
+
+		if !ok {
+			continue
+		}
+
+		tag, err := inject.parseTag(tagStr)
+
+		if err != nil {
+			return err
+		}
+
+		println("struct:", structValue.String())
+
+		if err := inject.executeInjectWithTag(tag, structValue.Field(i)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type injectTag struct {
+	Name string
+}
+
+func (inject *injectorImpl) parseTag(tag string) (*injectTag, error) {
+	return &injectTag{
+		Name: tag,
+	}, nil
+}
+
+func (inject *injectorImpl) executeInjectWithTag(tag *injectTag, fieldValue reflect.Value) error {
+	fieldType := fieldValue.Type()
+
+	if (fieldType.Kind() != reflect.Ptr || fieldType.Elem().Kind() != reflect.Struct) && fieldType.Kind() != reflect.Interface {
+		panic("invalid inject field type, expect ptr of struct or interface")
+	}
+
+	if ok := inject.Get(tag.Name, fieldValue.Addr().Interface()); !ok {
+		return xerrors.Wrapf(ErrResource, "inject object %s with type %s not found", tag.Name, fieldType)
+	}
+
+	return nil
+}
+
+var globalInjector Injector
+var globalOnce sync.Once
+
+func globalInit() {
+	globalInjector = New()
+}
+
+// Register call global injector with register function
+func Register(key string, val interface{}) {
+	globalOnce.Do(globalInit)
+
+	globalInjector.Register(key, val)
+}
+
+// Get call global injector with get function
+func Get(key string, val interface{}) bool {
+	globalOnce.Do(globalInit)
+
+	return globalInjector.Get(key, val)
+}
+
+// Find call global injector with Find function
+func Find(val interface{}) {
+	globalOnce.Do(globalInit)
+
+	globalInjector.Find(val)
+}
+
+// Inject .
+func Inject(val interface{}) error {
+	globalOnce.Do(globalInit)
+
+	return globalInjector.Inject(val)
+}

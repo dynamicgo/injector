@@ -1,7 +1,6 @@
 package injector
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,28 +10,28 @@ type testA struct {
 }
 
 type testB struct {
-	a  testA `inject:"nullable"`
-	a1 testA `inject:""`
+	A  *testA `inject:"a1"`
+	A1 *testA `inject:"a2"`
 }
 
-func TestStructExecutor(t *testing.T) {
-	executor, err := NewStructExecutor(reflect.TypeOf(&testB{}))
+func TestInjectorGet(t *testing.T) {
+	Register("a1", &testA{})
+	Register("a2", &testA{})
 
-	require.NoError(t, err)
+	var a1 *testA
 
-	require.Equal(t, 2, len(executor.Ops))
+	require.True(t, Get("a1", &a1))
 
-	op := executor.Ops[0].(*injectFieldOp)
+	var a2 *testA
 
-	require.True(t, op.nullable)
+	require.True(t, Get("a2", &a2))
 
-	op = executor.Ops[1].(*injectFieldOp)
+	require.False(t, Get("test", &a1))
 
-	require.False(t, op.nullable)
-}
+	b := &testB{}
 
-func BenchmarkCreateStructExecutor(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		NewStructExecutor(reflect.TypeOf(&testB{}))
-	}
+	require.NoError(t, Inject(b))
+
+	require.Equal(t, b.A, a1)
+	require.Equal(t, b.A, a2)
 }
