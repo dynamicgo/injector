@@ -184,6 +184,7 @@ func (inject *injectorImpl) Inject(target interface{}) error {
 	structValue := reflect.ValueOf(target).Elem()
 
 	for i := 0; i < structT.NumField(); i++ {
+
 		field := structT.Field(i)
 
 		tagStr, ok := field.Tag.Lookup("inject")

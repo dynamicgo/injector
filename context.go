@@ -2,6 +2,7 @@ package injector
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/dynamicgo/xerrors"
@@ -100,7 +101,13 @@ func (context *contextImpl) Bind(config config.Config) error {
 	runnables := context.runnables
 
 	for name, service := range services {
-		context.injector.Inject(service)
+		context.DebugF("inject service %s with type %s", name, reflect.TypeOf(service).String())
+
+		err := context.injector.Inject(service)
+
+		if err != nil {
+			return xerrors.Wrapf(err, "inject service %s with type %s -- failed", name, reflect.TypeOf(service).String())
+		}
 
 		runnable, ok := service.(Runnable)
 
