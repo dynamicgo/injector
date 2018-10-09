@@ -25,11 +25,25 @@ func RegisterService(name string, f ServiceF) {
 	globalContext.Register(name, f)
 }
 
-// RunServices run services
-func RunServices(config config.Config) error {
+// BindServices bind servies
+func BindServices(config config.Config) error {
 	globalOnce.Do(globalContextInit)
 
-	return globalContext.Run(config)
+	return globalContext.Bind(config)
+}
+
+// ServicesInjector .
+func ServicesInjector() Injector {
+	globalOnce.Do(globalContextInit)
+
+	return globalContext.Injector()
+}
+
+// RunServices run servies
+func RunServices() error {
+	globalOnce.Do(globalContextInit)
+
+	return globalContext.Run()
 }
 
 // Register call global injector with register function
