@@ -2,8 +2,12 @@ package injector
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 	"sync"
+
+	"github.com/dynamicgo/slf4go"
 
 	"github.com/dynamicgo/xerrors"
 )
@@ -34,15 +38,20 @@ func newTypeInjector(valueT reflect.Type) *typeInjector {
 }
 
 func (injector *typeInjector) Register(key string, val interface{}) {
-	injector.Store(key, val)
+	_, loaded := injector.LoadOrStore(key, val)
+
+	if loaded {
+		panic(fmt.Sprintf("register same type service %s with name %s", injector.valueT, key))
+	}
 }
 
 func (injector *typeInjector) Get(key string, val interface{}) bool {
 
 	valueT := reflect.TypeOf(val).Elem()
 
-	if valueT != injector.valueT || valueT.Kind() == reflect.Interface && !injector.valueT.Implements(valueT) {
-		panic("invalid input")
+	if valueT != injector.valueT && valueT.Kind() == reflect.Interface && !injector.valueT.Implements(valueT) {
+
+		panic(fmt.Sprintf("invalid input: %s %s", injector.valueT.String(), valueT.String()))
 	}
 
 	val2, ok := injector.Load(key)
@@ -81,11 +90,14 @@ func (injector *typeInjector) Find(target interface{}) {
 
 type injectorImpl struct {
 	sync.Map
+	slf4go.Logger
 }
 
 // New .
 func New() Injector {
-	return &injectorImpl{}
+	return &injectorImpl{
+		Logger: slf4go.Get("inject"),
+	}
 }
 
 func (inject *injectorImpl) getTypeInjector(valueT reflect.Type) *typeInjector {
@@ -93,8 +105,27 @@ func (inject *injectorImpl) getTypeInjector(valueT reflect.Type) *typeInjector {
 
 	if !ok {
 
-		injectT = newTypeInjector(valueT)
-		injectT, _ = inject.LoadOrStore(valueT, injectT)
+		if valueT.Kind() == reflect.Interface {
+
+			inject.Map.Range(func(key, val interface{}) bool {
+
+				valT := key.(reflect.Type)
+
+				if valT.Implements(valueT) {
+					injectT = val.(*typeInjector)
+					return false
+				}
+
+				return true
+			})
+		}
+
+		if injectT == nil {
+			injectT = newTypeInjector(valueT)
+
+			injectT, _ = inject.LoadOrStore(valueT, injectT)
+		}
+
 	}
 
 	return injectT.(*typeInjector)
@@ -102,6 +133,8 @@ func (inject *injectorImpl) getTypeInjector(valueT reflect.Type) *typeInjector {
 
 func (inject *injectorImpl) Register(key string, val interface{}) {
 	t := reflect.TypeOf(val)
+
+	inject.DebugF("register service %p with type: %s", val, t.String())
 
 	inject.getTypeInjector(t).Register(key, val)
 }
@@ -159,13 +192,15 @@ func (inject *injectorImpl) Inject(target interface{}) error {
 			continue
 		}
 
+		if strings.ToTitle(field.Name[:1]) != field.Name[:1] {
+			panic(fmt.Sprintf("inject filed must be export: %s", field.Name))
+		}
+
 		tag, err := inject.parseTag(tagStr)
 
 		if err != nil {
 			return err
 		}
-
-		println("struct:", structValue.String())
 
 		if err := inject.executeInjectWithTag(tag, structValue.Field(i)); err != nil {
 			return err
