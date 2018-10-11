@@ -3,6 +3,7 @@ package injector
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"sync"
 
 	"github.com/dynamicgo/xerrors"
@@ -23,14 +24,20 @@ type ServiceF func(config config.Config) (Service, error)
 // Runnable .
 type Runnable interface {
 	Service
-	Run() error
+	Start() error
+}
+
+// PriorityRunnable .
+type PriorityRunnable interface {
+	Runnable
+	Priority() int
 }
 
 // Context .
 type Context interface {
 	Register(name string, F ServiceF)
 	Bind(config config.Config) error
-	Run() error
+	Start() error
 	Injector() Injector
 }
 
@@ -119,28 +126,73 @@ func (context *contextImpl) Bind(config config.Config) error {
 	return nil
 }
 
-func (context *contextImpl) Run() error {
+type namedRunnable struct {
+	Runnable
+	Name string
+}
 
-	var wg sync.WaitGroup
+func (context *contextImpl) Start() error {
+
+	var prior []*namedRunnable
+	var runnables []*namedRunnable
 
 	for name, runnable := range context.runnables {
-		wg.Add(1)
 
-		context.runService(&wg, name, runnable)
+		if _, ok := runnable.(PriorityRunnable); ok {
+			prior = append(prior, &namedRunnable{
+				Runnable: runnable,
+				Name:     name,
+			})
+		} else {
+			runnables = append(runnables, &namedRunnable{
+				Runnable: runnable,
+				Name:     name,
+			})
+		}
+
+		// context.DebugF("service %s started ...", name)
+
+		// if err := runnable.Start(); err != nil {
+		// 	context.ErrorF("service %s stopped with err: %s", name, err)
+		// 	return err
+		// }
+
+		// context.DebugF("service %s stopped", name)
+	}
+
+	for _, n := range prior {
+		name := n.Name
+
+		runnable := n.Runnable
+
+		context.DebugF("service %s started ...", name)
+
+		if err := runnable.Start(); err != nil {
+			context.ErrorF("service %s stopped with err: %s", name, err)
+			return err
+		}
+
+		context.DebugF("service %s stopped", name)
+	}
+
+	sort.Slice(prior, func(i, j int) bool {
+		return prior[i].Runnable.(PriorityRunnable).Priority() < prior[j].Runnable.(PriorityRunnable).Priority()
+	})
+
+	for _, n := range runnables {
+		name := n.Name
+
+		runnable := n.Runnable
+
+		context.DebugF("service %s started ...", name)
+
+		if err := runnable.Start(); err != nil {
+			context.ErrorF("service %s stopped with err: %s", name, err)
+			return err
+		}
+
+		context.DebugF("service %s stopped", name)
 	}
 
 	return nil
-}
-
-func (context *contextImpl) runService(wg *sync.WaitGroup, name string, runnable Runnable) {
-	defer wg.Done()
-
-	context.DebugF("service %s started ...", name)
-
-	if err := runnable.Run(); err != nil {
-		context.ErrorF("service %s stopped with err: %s", name, err)
-		return
-	}
-
-	context.DebugF("service %s stopped", name)
 }
