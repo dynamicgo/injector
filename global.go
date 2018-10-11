@@ -39,11 +39,11 @@ func ServicesInjector() Injector {
 	return globalContext.Injector()
 }
 
-// RunServices run servies
-func RunServices() error {
+// StartServices start servies
+func StartServices() error {
 	globalOnce.Do(globalContextInit)
 
-	return globalContext.Run()
+	return globalContext.Start()
 }
 
 // Register call global injector with register function
