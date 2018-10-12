@@ -160,6 +160,10 @@ func (context *contextImpl) Start() error {
 		// context.DebugF("service %s stopped", name)
 	}
 
+	sort.Slice(prior, func(i, j int) bool {
+		return prior[i].Runnable.(PriorityRunnable).Priority() < prior[j].Runnable.(PriorityRunnable).Priority()
+	})
+
 	for _, n := range prior {
 		name := n.Name
 
@@ -174,10 +178,6 @@ func (context *contextImpl) Start() error {
 
 		context.DebugF("service %s stopped", name)
 	}
-
-	sort.Slice(prior, func(i, j int) bool {
-		return prior[i].Runnable.(PriorityRunnable).Priority() < prior[j].Runnable.(PriorityRunnable).Priority()
-	})
 
 	for _, n := range runnables {
 		name := n.Name
