@@ -143,13 +143,15 @@ func (context *contextImpl) Join() {
 
 	for name, runnable := range context.runnables {
 
+		context.DebugF("check service joinable %s", name)
+
 		joinable, ok := runnable.(RunnableJoinable)
 
 		if ok {
 			wg.Add(1)
-			context.DebugF("service %s started ...", name)
+			context.DebugF("service %s join ...", name)
 			context.doJoin(&wg, joinable)
-			context.DebugF("service %s stopped", name)
+			context.DebugF("service %s exit", name)
 		}
 	}
 
