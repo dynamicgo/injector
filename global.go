@@ -25,6 +25,13 @@ func RegisterService(name string, f ServiceF) {
 	globalContext.Register(name, f)
 }
 
+// ServicesJoin register service
+func ServicesJoin() {
+	globalOnce.Do(globalContextInit)
+
+	globalContext.Join()
+}
+
 // BindServices bind servies
 func BindServices(config config.Config) error {
 	globalOnce.Do(globalContextInit)

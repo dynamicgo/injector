@@ -33,12 +33,19 @@ type PriorityRunnable interface {
 	Priority() int
 }
 
+// RunnableJoinable .
+type RunnableJoinable interface {
+	Runnable
+	Join()
+}
+
 // Context .
 type Context interface {
 	Register(name string, F ServiceF)
 	Bind(config config.Config) error
 	Start() error
 	Injector() Injector
+	Join()
 }
 
 type contextImpl struct {
@@ -131,6 +138,30 @@ type namedRunnable struct {
 	Name string
 }
 
+func (context *contextImpl) Join() {
+	var wg sync.WaitGroup
+
+	for name, runnable := range context.runnables {
+
+		joinable, ok := runnable.(RunnableJoinable)
+
+		if ok {
+			wg.Add(1)
+			context.DebugF("service %s started ...", name)
+			context.doJoin(&wg, joinable)
+			context.DebugF("service %s stopped", name)
+		}
+	}
+
+	wg.Wait()
+}
+
+func (context *contextImpl) doJoin(wg *sync.WaitGroup, joinable RunnableJoinable) {
+	defer wg.Done()
+
+	joinable.Join()
+}
+
 func (context *contextImpl) Start() error {
 
 	var prior []*namedRunnable
@@ -169,14 +200,14 @@ func (context *contextImpl) Start() error {
 
 		runnable := n.Runnable
 
-		context.DebugF("service %s started ...", name)
+		context.DebugF("service %s start ...", name)
 
 		if err := runnable.Start(); err != nil {
 			context.ErrorF("service %s stopped with err: %s", name, err)
 			return err
 		}
 
-		context.DebugF("service %s stopped", name)
+		context.DebugF("service %s started", name)
 	}
 
 	for _, n := range runnables {
@@ -184,14 +215,14 @@ func (context *contextImpl) Start() error {
 
 		runnable := n.Runnable
 
-		context.DebugF("service %s started ...", name)
+		context.DebugF("service %s start ...", name)
 
 		if err := runnable.Start(); err != nil {
 			context.ErrorF("service %s stopped with err: %s", name, err)
 			return err
 		}
 
-		context.DebugF("service %s stopped", name)
+		context.DebugF("service %s started", name)
 	}
 
 	return nil
