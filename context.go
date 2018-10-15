@@ -150,7 +150,7 @@ func (context *contextImpl) Join() {
 		if ok {
 			wg.Add(1)
 			context.DebugF("service %s join ...", name)
-			context.doJoin(&wg, joinable)
+			go context.doJoin(&wg, joinable)
 			context.DebugF("service %s exit", name)
 		}
 	}
