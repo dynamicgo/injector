@@ -38,6 +38,7 @@ func newTypeInjector(valueT reflect.Type) *typeInjector {
 }
 
 func (injector *typeInjector) Register(key string, val interface{}) {
+
 	_, loaded := injector.LoadOrStore(key, val)
 
 	if loaded {
@@ -131,8 +132,37 @@ func (inject *injectorImpl) getTypeInjector(valueT reflect.Type) *typeInjector {
 	return injectT.(*typeInjector)
 }
 
+func (inject *injectorImpl) getTypeInjectors(valueT reflect.Type) []*typeInjector {
+	injectT, ok := inject.Load(valueT)
+
+	var injectors []*typeInjector
+
+	if !ok {
+
+		if valueT.Kind() == reflect.Interface {
+
+			inject.Map.Range(func(key, val interface{}) bool {
+
+				valT := key.(reflect.Type)
+
+				if valT.Implements(valueT) {
+					injectors = append(injectors, val.(*typeInjector))
+				}
+
+				return true
+			})
+		}
+	} else {
+		injectors = append(injectors, injectT.(*typeInjector))
+	}
+
+	return injectors
+}
+
 func (inject *injectorImpl) Register(key string, val interface{}) {
 	t := reflect.TypeOf(val)
+
+	println(fmt.Sprintf("register key %s with type %s", key, t))
 
 	inject.DebugF("register service %p with type: %s", val, t.String())
 
@@ -152,7 +182,15 @@ func (inject *injectorImpl) Get(key string, val interface{}) bool {
 		panic("invalid inject field type, expect ptr of struct or interface")
 	}
 
-	return inject.getTypeInjector(t).Get(key, val)
+	injectors := inject.getTypeInjectors(t)
+
+	for _, ij := range injectors {
+		if ij.Get(key, val) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (inject *injectorImpl) Find(val interface{}) {
