@@ -83,8 +83,6 @@ func (injector *typeInjector) Find(target interface{}) {
 		sliceValue.Index(i).Set(reflect.ValueOf(values[i]))
 	}
 
-	println("slice len", sliceValue.Len())
-
 	targetSlice.Elem().Set(sliceValue)
 
 }
