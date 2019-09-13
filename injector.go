@@ -117,7 +117,7 @@ func (injector *injectorImpl) Find(services interface{}) {
 	}
 
 	if serviceT.Kind() != reflect.Slice {
-		err := xerrors.Wrapf(ErrType, "expect ptr of interface or struct,got %s", serviceT)
+		err := xerrors.Wrapf(ErrType, "expect Slice of interface or struct,got %s", serviceT)
 		panic(err)
 	}
 
