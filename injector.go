@@ -78,6 +78,10 @@ func (injector *injectorImpl) Get(name string, service interface{}) bool {
 		panic(err)
 	}
 
+	// for sname, service := range injector.services {
+	// 	fmt.Printf("try find service(%s) with type(%s) get service(%s) with type(%s)\n", name, serviceT, sname, reflect.TypeOf(service))
+	// }
+
 	storaged, ok := injector.services[name]
 
 	if !ok {
